@@ -3,6 +3,7 @@ let currentChecklistData = null;
 let autoSaveTimer = null;
 let editingTodoId = null;
 let confirmCallback = null;
+let currentTheme = 'system';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -11,17 +12,23 @@ function generateId() {
 async function init() {
   await store.ready();
   await loadConfig();
-  await refreshChecklistList();
   setupEventListeners();
   setupAutoSave();
 
   const isPinned = await api.getAlwaysOnTop();
   updatePinButton(isPinned);
 
+  const opacity = await api.getOpacity();
+  const slider = document.getElementById('opacity-slider');
+  slider.value = Math.round(opacity * 100);
+  document.getElementById('opacity-label').textContent = Math.round(opacity * 100) + '%';
+
   const checklists = await store.listChecklists();
   const todayKey = store._getDateKey();
   if (checklists.includes(todayKey)) {
     await openChecklist(todayKey);
+  } else {
+    await createNewChecklist();
   }
 
   api.onCreateNewChecklist(() => createNewChecklist());
@@ -39,19 +46,8 @@ async function init() {
 
 async function loadConfig() {
   const config = await api.getConfig();
-  const themeSelect = document.getElementById('setting-theme');
-  if (themeSelect) themeSelect.value = config.theme || 'system';
-  const shortcutInput = document.getElementById('setting-shortcut');
-  if (shortcutInput) shortcutInput.value = config.shortcutKey || 'Ctrl+Shift+N';
-  const alwaysOnTopCheckbox = document.getElementById('setting-always-on-top');
-  if (alwaysOnTopCheckbox) alwaysOnTopCheckbox.checked = config.alwaysOnTop || false;
-  const opacitySlider = document.getElementById('setting-opacity');
-  if (opacitySlider) {
-    const op = Math.round((config.opacity || 1.0) * 100);
-    opacitySlider.value = op;
-    document.getElementById('opacity-value').textContent = op + '%';
-  }
-  applyTheme(config.theme || 'system');
+  currentTheme = config.theme || 'system';
+  applyTheme(currentTheme);
 }
 
 function applyTheme(theme) {
@@ -70,6 +66,16 @@ function applyTheme(theme) {
   }
 }
 
+function cycleTheme() {
+  const themes = ['light', 'dark', 'system'];
+  const idx = themes.indexOf(currentTheme);
+  currentTheme = themes[(idx + 1) % themes.length];
+  applyTheme(currentTheme);
+  const labels = { light: '浅色', dark: '深色', system: '跟随系统' };
+  showToast('主题: ' + labels[currentTheme]);
+  api.saveConfig({ theme: currentTheme });
+}
+
 function setupAutoSave() {
   if (autoSaveTimer) clearInterval(autoSaveTimer);
   autoSaveTimer = setInterval(() => {
@@ -77,53 +83,12 @@ function setupAutoSave() {
   }, 10000);
 }
 
-async function refreshChecklistList() {
-  const checklists = await store.listChecklists();
-  const listEl = document.getElementById('checklist-list');
-  const sorted = checklists.sort().reverse();
-
-  listEl.innerHTML = sorted.map(name => {
-    const isActive = name === currentChecklistName;
-    const dateLabel = formatDateLabel(name);
-    return `<div class="checklist-item ${isActive ? 'active' : ''}" data-name="${name}">
-      <span class="checklist-item-label">${dateLabel}</span>
-      <button class="btn-icon btn-tiny btn-remove-checklist" data-name="${name}" title="删除">✕</button>
-    </div>`;
-  }).join('');
-
-  listEl.querySelectorAll('.checklist-item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.classList.contains('btn-remove-checklist')) return;
-      openChecklist(el.dataset.name);
-    });
-  });
-
-  listEl.querySelectorAll('.btn-remove-checklist').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteChecklist(btn.dataset.name);
-    });
-  });
-}
-
-function formatDateLabel(name) {
-  const today = store._getDateKey();
-  const yesterday = store._getDateKey(new Date(Date.now() - 86400000));
-  if (name === today) return '📌 今天';
-  if (name === yesterday) return '📌 昨天';
-  return name;
-}
-
 async function createNewChecklist() {
-  const { name, data, isNew } = await store.createTodayChecklist();
+  const { name, data } = await store.createTodayChecklist();
   currentChecklistName = name;
   currentChecklistData = data;
-  await refreshChecklistList();
   showChecklistView();
   renderTodoList();
-  if (isNew) {
-    document.getElementById('checklist-title').focus();
-  }
 }
 
 async function openChecklist(name) {
@@ -131,14 +96,11 @@ async function openChecklist(name) {
   if (!data) return;
   currentChecklistName = name;
   currentChecklistData = data;
-  await refreshChecklistList();
   showChecklistView();
   renderTodoList();
 }
 
 function showChecklistView() {
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('checklist-view').style.display = '';
   document.getElementById('checklist-title').textContent = currentChecklistData.title || '今日清单';
   updateStats();
 }
@@ -165,7 +127,7 @@ function renderTodoList() {
 
     return `<div class="todo-item ${completedClass}" data-id="${todo.id}">
       <div class="todo-check" data-id="${todo.id}">
-        ${todo.completed ? '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="var(--accent)"/><path d="M6 10l3 3 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" stroke="var(--border-color)" stroke-width="1.5" fill="none"/></svg>'}
+        ${todo.completed ? '<svg width="14" height="14" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="var(--accent)"/><path d="M6 10l3 3 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '<svg width="14" height="14" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" stroke="var(--border)" stroke-width="1.5" fill="none"/></svg>'}
       </div>
       <div class="todo-content">
         <span class="todo-text">${escapeHtml(todo.text)}</span>
@@ -175,8 +137,8 @@ function renderTodoList() {
         </div>
       </div>
       <div class="todo-actions">
-        <button class="btn-icon btn-tiny btn-edit-todo" data-id="${todo.id}" title="编辑">✏️</button>
-        <button class="btn-icon btn-tiny btn-delete-todo" data-id="${todo.id}" title="删除">🗑️</button>
+        <button class="icon-btn" data-action="edit" data-id="${todo.id}" title="编辑" style="font-size:11px;">✏️</button>
+        <button class="icon-btn" data-action="delete" data-id="${todo.id}" title="删除" style="font-size:11px;">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -184,10 +146,10 @@ function renderTodoList() {
   listEl.querySelectorAll('.todo-check').forEach(el => {
     el.addEventListener('click', () => toggleTodo(el.dataset.id));
   });
-  listEl.querySelectorAll('.btn-edit-todo').forEach(btn => {
+  listEl.querySelectorAll('[data-action="edit"]').forEach(btn => {
     btn.addEventListener('click', () => openEditTodo(btn.dataset.id));
   });
-  listEl.querySelectorAll('.btn-delete-todo').forEach(btn => {
+  listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
     btn.addEventListener('click', () => deleteTodo(btn.dataset.id));
   });
 
@@ -203,9 +165,6 @@ function escapeHtml(text) {
 
 function addTodo() {
   const input = document.getElementById('new-todo-input');
-  const prioritySelect = document.getElementById('new-todo-priority');
-  const reminderInput = document.getElementById('new-todo-reminder');
-
   const text = input.value.trim();
   if (!text) return;
 
@@ -213,15 +172,13 @@ function addTodo() {
     id: generateId(),
     text,
     completed: false,
-    priority: prioritySelect.value,
-    reminder: reminderInput.value || null,
+    priority: 'medium',
+    reminder: null,
     createdAt: new Date().toISOString()
   };
 
   currentChecklistData.todos.push(todo);
   input.value = '';
-  reminderInput.value = '';
-  prioritySelect.value = 'medium';
   renderTodoList();
   saveCurrentChecklist();
 }
@@ -270,19 +227,15 @@ function saveEditTodo() {
 }
 
 async function deleteChecklist(name) {
-  showConfirm('删除清单', `确定要将清单「${name}」移入回收站吗？`, async () => {
+  showConfirm('删除清单', '确定将清单移入回收站吗？', async () => {
     const result = await api.moveToRecycleBin(name + '.json');
     if (result.success) {
-      if (currentChecklistName === name) {
-        currentChecklistName = null;
-        currentChecklistData = null;
-        document.getElementById('empty-state').style.display = '';
-        document.getElementById('checklist-view').style.display = 'none';
-      }
-      await refreshChecklistList();
+      currentChecklistName = null;
+      currentChecklistData = null;
+      await createNewChecklist();
       showToast('已移入回收站');
     } else {
-      showToast('删除失败: ' + (result.error || '未知错误'));
+      showToast('删除失败');
     }
   });
 }
@@ -294,9 +247,7 @@ function updateStats() {
   const done = todos.filter(t => t.completed).length;
   const rate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-  document.getElementById('stat-total').textContent = total;
-  document.getElementById('stat-done').textContent = done;
-  document.getElementById('stat-rate').textContent = rate + '%';
+  document.getElementById('progress-text').textContent = `${done}/${total}`;
   document.getElementById('progress-fill').style.width = rate + '%';
 }
 
@@ -337,31 +288,6 @@ async function exportChecklist(format) {
   }
 }
 
-async function importChecklist() {
-  const result = await api.importChecklist();
-  if (!result) return;
-
-  try {
-    const data = JSON.parse(result.content);
-    if (data.todos && Array.isArray(data.todos)) {
-      const name = store._getDateKey();
-      data.date = name;
-      data.updatedAt = new Date().toISOString();
-      await store.saveChecklist(name, data);
-      currentChecklistName = name;
-      currentChecklistData = data;
-      await refreshChecklistList();
-      showChecklistView();
-      renderTodoList();
-      showToast('导入成功！');
-    } else {
-      showToast('文件格式不正确');
-    }
-  } catch (e) {
-    showToast('导入失败，请检查文件格式');
-  }
-}
-
 async function saveAsTemplate() {
   if (!currentChecklistData) return;
   const nameInput = document.getElementById('template-name-input');
@@ -381,23 +307,23 @@ async function refreshTemplateList() {
   const listEl = document.getElementById('template-list');
 
   if (templates.length === 0) {
-    listEl.innerHTML = '<p class="empty-hint">暂无模板，保存当前清单为模板以便复用</p>';
+    listEl.innerHTML = '<p style="font-size:11px;color:var(--text-muted);">暂无模板</p>';
     return;
   }
 
   listEl.innerHTML = templates.map(name => {
     return `<div class="template-item">
       <span class="template-name">${escapeHtml(name)}</span>
-      <div class="template-item-actions">
-        <button class="btn-secondary btn-tiny btn-use-template" data-name="${name}">使用</button>
-        <button class="btn-icon btn-tiny btn-delete-template" data-name="${name}" title="删除">🗑️</button>
+      <div class="template-actions">
+        <button class="text-btn" data-use="${escapeHtml(name)}">使用</button>
+        <button class="icon-btn" data-del-template="${escapeHtml(name)}" title="删除" style="font-size:11px;">🗑️</button>
       </div>
     </div>`;
   }).join('');
 
-  listEl.querySelectorAll('.btn-use-template').forEach(btn => {
+  listEl.querySelectorAll('[data-use]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const template = await store.loadTemplate(btn.dataset.name);
+      const template = await store.loadTemplate(btn.dataset.use);
       if (template && template.todos) {
         const name = store._getDateKey();
         let data = await store.loadChecklist(name);
@@ -423,7 +349,6 @@ async function refreshTemplateList() {
         await store.saveChecklist(name, data);
         currentChecklistName = name;
         currentChecklistData = data;
-        await refreshChecklistList();
         showChecklistView();
         renderTodoList();
         hideModal('modal-templates');
@@ -432,9 +357,9 @@ async function refreshTemplateList() {
     });
   });
 
-  listEl.querySelectorAll('.btn-delete-template').forEach(btn => {
+  listEl.querySelectorAll('[data-del-template]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await store.deleteTemplate(btn.dataset.name);
+      await store.deleteTemplate(btn.dataset.delTemplate);
       await refreshTemplateList();
     });
   });
@@ -448,68 +373,105 @@ async function refreshRecycleBin() {
 
   if (items.length === 0) {
     hintEl.textContent = '暂无已删除的清单';
-    hintEl.style.display = '';
     emptyBinBtn.style.display = 'none';
     listEl.innerHTML = '';
     return;
   }
 
-  hintEl.textContent = `${items.length} 个已删除的清单`;
+  hintEl.textContent = `${items.length} 个清单`;
   emptyBinBtn.style.display = '';
 
   listEl.innerHTML = items.map(item => {
     const deletedDate = item.deletedAt
       ? new Date(item.deletedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-      : '未知';
+      : '';
     const title = item.originalData?.title || item.name;
-    return `<div class="recycle-bin-item">
-      <div class="recycle-bin-info">
-        <span class="recycle-bin-name">${escapeHtml(title)}</span>
-        <span class="recycle-bin-date">删除于 ${deletedDate}</span>
+    return `<div class="recycle-item">
+      <div class="recycle-info">
+        <span class="recycle-name">${escapeHtml(title)}</span>
+        <span class="recycle-date">${deletedDate}</span>
       </div>
-      <div class="recycle-bin-actions">
-        <button class="btn-secondary btn-tiny btn-restore" data-name="${item.fileName}">恢复</button>
-        <button class="btn-icon btn-tiny btn-perm-delete" data-name="${item.fileName}" title="永久删除">🗑️</button>
+      <div class="recycle-actions">
+        <button class="text-btn" data-restore="${item.fileName}">恢复</button>
+        <button class="icon-btn" data-perm-del="${item.fileName}" title="永久删除" style="font-size:11px;">🗑️</button>
       </div>
     </div>`;
   }).join('');
 
-  listEl.querySelectorAll('.btn-restore').forEach(btn => {
+  listEl.querySelectorAll('[data-restore]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const result = await api.restoreFromRecycleBin(btn.dataset.name);
+      const result = await api.restoreFromRecycleBin(btn.dataset.restore);
       if (result.success) {
         await refreshRecycleBin();
-        await refreshChecklistList();
         showToast('已恢复');
       } else {
-        showToast('恢复失败: ' + (result.error || ''));
+        showToast('恢复失败');
       }
     });
   });
 
-  listEl.querySelectorAll('.btn-perm-delete').forEach(btn => {
+  listEl.querySelectorAll('[data-perm-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      showConfirm('永久删除', '确定要永久删除此清单吗？此操作不可恢复。', async () => {
-        const result = await api.permanentlyDelete(btn.dataset.name);
+      showConfirm('永久删除', '确定要永久删除吗？此操作不可恢复。', async () => {
+        const result = await api.permanentlyDelete(btn.dataset.permDel);
         if (result.success) {
           await refreshRecycleBin();
           showToast('已永久删除');
-        } else {
-          showToast('删除失败: ' + (result.error || ''));
         }
       });
     });
   });
 }
 
+async function refreshHistoryList() {
+  const checklists = await store.listChecklists();
+  const listEl = document.getElementById('history-list');
+  const sorted = checklists.sort().reverse();
+
+  if (sorted.length === 0) {
+    listEl.innerHTML = '<p style="font-size:11px;color:var(--text-muted);">暂无清单</p>';
+    return;
+  }
+
+  listEl.innerHTML = sorted.map(name => {
+    const isActive = name === currentChecklistName;
+    const dateLabel = formatDateLabel(name);
+    return `<div class="history-item ${isActive ? 'active' : ''}" data-name="${name}">
+      <span class="history-item-name">${dateLabel}</span>
+      <span class="history-item-del" data-del="${name}">✕</span>
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('.history-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('history-item-del')) return;
+      openChecklist(el.dataset.name);
+      hideModal('modal-history');
+    });
+  });
+
+  listEl.querySelectorAll('.history-item-del').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteChecklist(el.dataset.del);
+    });
+  });
+}
+
+function formatDateLabel(name) {
+  const today = store._getDateKey();
+  const yesterday = store._getDateKey(new Date(Date.now() - 86400000));
+  if (name === today) return '📌 今天';
+  if (name === yesterday) return '📌 昨天';
+  return name;
+}
+
 function updatePinButton(pinned) {
   const btn = document.getElementById('btn-pin');
   if (pinned) {
     btn.classList.add('active');
-    btn.title = '取消置顶';
   } else {
     btn.classList.remove('active');
-    btn.title = '置顶窗口';
   }
 }
 
@@ -544,9 +506,25 @@ function showToast(message) {
   }, 2000);
 }
 
+function toggleMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  if (menu.style.display === 'none') {
+    menu.style.display = '';
+  } else {
+    menu.style.display = 'none';
+  }
+}
+
+function toggleOpacityBar() {
+  const bar = document.getElementById('opacity-bar');
+  if (bar.style.display === 'none') {
+    bar.style.display = '';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
 function setupEventListeners() {
-  document.getElementById('btn-new-checklist').addEventListener('click', () => createNewChecklist());
-  document.getElementById('btn-empty-create').addEventListener('click', () => createNewChecklist());
   document.getElementById('btn-add-todo').addEventListener('click', () => addTodo());
 
   document.getElementById('new-todo-input').addEventListener('keydown', (e) => {
@@ -567,91 +545,83 @@ function setupEventListeners() {
     }
   });
 
-  document.getElementById('btn-export').addEventListener('click', () => {
-    const format = confirm('点击"确定"导出为 JSON 格式，"取消"导出为 TXT 格式') ? 'json' : 'txt';
-    exportChecklist(format);
-  });
-
-  document.getElementById('btn-delete-checklist').addEventListener('click', () => {
-    if (currentChecklistName) deleteChecklist(currentChecklistName);
-  });
-
-  document.getElementById('btn-save-edit').addEventListener('click', () => saveEditTodo());
-
   document.getElementById('btn-pin').addEventListener('click', async () => {
     const current = await api.getAlwaysOnTop();
     const newState = !current;
     await api.toggleAlwaysOnTop(newState);
     updatePinButton(newState);
-    document.getElementById('setting-always-on-top').checked = newState;
   });
 
-  document.getElementById('btn-recycle-bin').addEventListener('click', async () => {
-    await refreshRecycleBin();
-    showModal('modal-recycle-bin');
+  document.getElementById('btn-opacity').addEventListener('click', () => toggleOpacityBar());
+
+  document.getElementById('opacity-slider').addEventListener('input', async (e) => {
+    const val = parseInt(e.target.value);
+    document.getElementById('opacity-label').textContent = val + '%';
+    await api.setOpacity(val / 100);
   });
 
-  document.getElementById('btn-empty-bin').addEventListener('click', () => {
-    showConfirm('清空回收站', '确定要永久删除回收站中的所有清单吗？此操作不可恢复。', async () => {
-      const result = await api.emptyRecycleBin();
-      if (result.success) {
-        await refreshRecycleBin();
-        showToast(`已清空回收站 (${result.count} 项)`);
-      } else {
-        showToast('清空失败');
-      }
-    });
+  document.getElementById('btn-more').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMoreMenu();
+  });
+
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('more-menu');
+    if (menu.style.display !== 'none' && !e.target.closest('#more-menu') && !e.target.closest('#btn-more')) {
+      menu.style.display = 'none';
+    }
+  });
+
+  document.getElementById('btn-new-checklist').addEventListener('click', () => {
+    toggleMoreMenu();
+    createNewChecklist();
+  });
+
+  document.getElementById('btn-history').addEventListener('click', async () => {
+    toggleMoreMenu();
+    await refreshHistoryList();
+    showModal('modal-history');
   });
 
   document.getElementById('btn-templates').addEventListener('click', async () => {
+    toggleMoreMenu();
     await refreshTemplateList();
     showModal('modal-templates');
   });
 
+  document.getElementById('btn-export').addEventListener('click', () => {
+    toggleMoreMenu();
+    exportChecklist('json');
+  });
+
+  document.getElementById('btn-recycle-bin').addEventListener('click', async () => {
+    toggleMoreMenu();
+    await refreshRecycleBin();
+    showModal('modal-recycle-bin');
+  });
+
+  document.getElementById('btn-theme').addEventListener('click', () => {
+    toggleMoreMenu();
+    cycleTheme();
+  });
+
+  document.getElementById('btn-delete-checklist').addEventListener('click', () => {
+    toggleMoreMenu();
+    if (currentChecklistName) deleteChecklist(currentChecklistName);
+  });
+
+  document.getElementById('btn-save-edit').addEventListener('click', () => saveEditTodo());
+
   document.getElementById('btn-save-template').addEventListener('click', () => saveAsTemplate());
 
-  document.getElementById('btn-settings').addEventListener('click', async () => {
-    const dir = await api.getDataDir();
-    document.getElementById('setting-data-dir').textContent = dir;
-    showModal('modal-settings');
-  });
-
-  document.getElementById('setting-theme').addEventListener('change', async (e) => {
-    const theme = e.target.value;
-    applyTheme(theme);
-    const config = await api.getConfig();
-    config.theme = theme;
-    await api.saveConfig(config);
-  });
-
-  document.getElementById('setting-always-on-top').addEventListener('change', async (e) => {
-    const pinned = e.target.checked;
-    await api.toggleAlwaysOnTop(pinned);
-    updatePinButton(pinned);
-  });
-
-  document.getElementById('setting-opacity').addEventListener('input', async (e) => {
-    const val = parseInt(e.target.value);
-    document.getElementById('opacity-value').textContent = val + '%';
-    await api.setOpacity(val / 100);
-  });
-
-  document.getElementById('btn-update-shortcut').addEventListener('click', async () => {
-    const key = document.getElementById('setting-shortcut').value.trim();
-    if (!key) return;
-    const success = await api.updateShortcut(key);
-    if (success) {
-      showToast('快捷键已更新');
-    } else {
-      showToast('快捷键设置失败，请尝试其他组合');
-    }
-  });
-
-  document.getElementById('btn-import').addEventListener('click', () => importChecklist());
-
-  document.getElementById('btn-open-data-dir').addEventListener('click', async () => {
-    const dir = await api.getDataDir();
-    api.showItemInFolder(dir);
+  document.getElementById('btn-empty-bin').addEventListener('click', () => {
+    showConfirm('清空回收站', '确定永久删除所有清单吗？', async () => {
+      const result = await api.emptyRecycleBin();
+      if (result.success) {
+        await refreshRecycleBin();
+        showToast(`已清空 (${result.count} 项)`);
+      }
+    });
   });
 
   document.getElementById('btn-confirm-ok').addEventListener('click', () => {
@@ -664,8 +634,7 @@ function setupEventListeners() {
 
   document.querySelectorAll('.modal-close').forEach(btn => {
     btn.addEventListener('click', () => {
-      const modalId = btn.dataset.modal;
-      hideModal(modalId);
+      hideModal(btn.dataset.modal);
     });
   });
 
@@ -676,24 +645,6 @@ function setupEventListeners() {
       }
     });
   });
-
-  document.getElementById('checklist-list').addEventListener('dblclick', (e) => {
-    if (e.target === document.getElementById('checklist-list') || e.target.classList.contains('sidebar-list')) {
-      createNewChecklist();
-    }
-  });
-
-  window.addEventListener('beforeunload', () => {
-    if (currentChecklistData) {
-      saveCurrentChecklist();
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
-    }
-  });
 }
 
-init();
+document.addEventListener('DOMContentLoaded', init);

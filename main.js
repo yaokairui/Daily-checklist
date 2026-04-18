@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, Notification, dialog, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, Notification, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -15,8 +15,8 @@ if (!fs.existsSync(templatesDir)) fs.mkdirSync(templatesDir, { recursive: true }
 let mainWindow = null;
 let tray = null;
 let reminderTimers = [];
-let isAlwaysOnTop = false;
-let windowOpacity = 1.0;
+let isAlwaysOnTop = true;
+let windowOpacity = 0.92;
 
 const cliArgs = process.argv.slice(1);
 const shouldCreateNew = cliArgs.includes('--new') || cliArgs.includes('-n');
@@ -27,30 +27,30 @@ function loadConfig() {
     if (fs.existsSync(configFile)) {
       return JSON.parse(fs.readFileSync(configFile, 'utf-8'));
     }
-  } catch (e) { /* config read error, return defaults */ }
+  } catch (e) {}
   return {
-    windowBounds: { width: 900, height: 680, x: undefined, y: undefined },
+    windowBounds: { width: 240, height: 380, x: undefined, y: undefined },
     theme: 'system',
     shortcutKey: 'CommandOrControl+Shift+N',
-    alwaysOnTop: false,
-    opacity: 1.0,
-    pinWindowSize: { width: 360, height: 500 }
+    alwaysOnTop: true,
+    opacity: 0.92
   };
 }
 
 function saveConfig(config) {
   try {
     fs.writeFileSync(configFile, JSON.stringify(config, null, 2), 'utf-8');
-  } catch (e) { /* config save error */ }
+  } catch (e) {}
 }
 
 function createWindow() {
   const config = loadConfig();
 
   mainWindow = new BrowserWindow({
-    ...config.windowBounds,
-    minWidth: 720,
-    minHeight: 520,
+    width: config.windowBounds.width || 240,
+    height: config.windowBounds.height || 380,
+    minWidth: 200,
+    minHeight: 260,
     title: '日常清单',
     icon: path.join(__dirname, 'src', 'assets', 'icon.png'),
     webPreferences: {
@@ -59,15 +59,17 @@ function createWindow() {
       nodeIntegration: false
     },
     frame: false,
-    transparent: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e2e' : '#f5f5f7',
-    alwaysOnTop: config.alwaysOnTop || false,
-    opacity: config.opacity || 1.0,
+    transparent: true,
+    resizable: true,
+    alwaysOnTop: config.alwaysOnTop !== false,
+    opacity: config.opacity || 0.92,
+    skipTaskbar: true,
+    hasShadow: false,
     show: false
   });
 
-  isAlwaysOnTop = config.alwaysOnTop || false;
-  windowOpacity = config.opacity || 1.0;
+  isAlwaysOnTop = config.alwaysOnTop !== false;
+  windowOpacity = config.opacity || 0.92;
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
 
@@ -114,10 +116,10 @@ function createTray() {
   }
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: '显示主窗口', click: () => showMainWindow() },
+    { label: '显示', click: () => showMainWindow() },
     { label: '新建清单', click: () => createNewChecklist() },
     { type: 'separator' },
-    { label: '置顶窗口', type: 'checkbox', checked: isAlwaysOnTop, click: (menuItem) => {
+    { label: '置顶', type: 'checkbox', checked: isAlwaysOnTop, click: (menuItem) => {
       toggleAlwaysOnTop(menuItem.checked);
     }},
     { type: 'separator' },
@@ -182,13 +184,12 @@ function registerShortcuts() {
     globalShortcut.register(config.shortcutKey, () => {
       createNewChecklist();
     });
-  } catch (e) { /* shortcut registration failed */ }
+  } catch (e) {}
 }
 
 function setupReminders(todos) {
   reminderTimers.forEach(t => clearTimeout(t));
   reminderTimers = [];
-
   if (!todos || !Array.isArray(todos)) return;
 
   const now = Date.now();
@@ -220,7 +221,6 @@ function moveToRecycleBin(fileName) {
     const srcPath = path.join(dataDir, fileName);
     if (!fs.existsSync(srcPath)) return { success: false, error: '文件不存在' };
 
-    const metaPath = srcPath + '.meta';
     const content = fs.readFileSync(srcPath, 'utf-8');
     let data;
     try { data = JSON.parse(content); } catch (e) { data = {}; }
@@ -233,7 +233,6 @@ function moveToRecycleBin(fileName) {
 
     const destPath = path.join(recycleBinDir, fileName);
     fs.writeFileSync(destPath, content, 'utf-8');
-    fs.writeFileSync(metaPath.replace(recycleBinDir, recycleBinDir), JSON.stringify(meta, null, 2), 'utf-8');
 
     const destMetaPath = path.join(recycleBinDir, fileName.replace('.json', '.meta.json'));
     fs.writeFileSync(destMetaPath, JSON.stringify(meta, null, 2), 'utf-8');
@@ -299,7 +298,7 @@ function listRecycleBin() {
       const metaPath = path.join(recycleBinDir, f.replace('.json', '.meta.json'));
       let meta = {};
       if (fs.existsSync(metaPath)) {
-        try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')); } catch (e) { /* meta parse error */ }
+        try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')); } catch (e) {}
       }
       return {
         fileName: f,
@@ -418,26 +417,6 @@ ipcMain.handle('export-checklist', async (event, { content, format, defaultName 
   }
 });
 
-ipcMain.handle('import-checklist', async () => {
-  try {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: '导入清单',
-      filters: [
-        { name: '清单文件', extensions: ['json', 'txt'] }
-      ],
-      properties: ['openFile']
-    });
-
-    if (result.canceled || result.filePaths.length === 0) return null;
-
-    const filePath = result.filePaths[0];
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return { content, path: filePath };
-  } catch (e) {
-    return null;
-  }
-});
-
 ipcMain.handle('setup-reminders', (event, todos) => {
   setupReminders(todos);
   return true;
@@ -449,32 +428,8 @@ ipcMain.handle('save-config', (event, config) => {
   return true;
 });
 
-ipcMain.handle('update-shortcut', (event, newKey) => {
-  const config = loadConfig();
-  try { globalShortcut.unregister(config.shortcutKey); } catch (e) { /* unregister error */ }
-  config.shortcutKey = newKey;
-  saveConfig(config);
-  try {
-    globalShortcut.register(newKey, () => createNewChecklist());
-    return true;
-  } catch (e) {
-    try { globalShortcut.register(config.shortcutKey, () => createNewChecklist()); } catch (ex) { /* fallback error */ }
-    return false;
-  }
-});
-
 ipcMain.on('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
-ipcMain.on('window-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
-  }
-});
 ipcMain.on('window-close', () => { if (mainWindow) mainWindow.hide(); });
-ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false);
 
 ipcMain.handle('toggle-always-on-top', (event, pin) => {
   toggleAlwaysOnTop(pin);
@@ -489,11 +444,3 @@ ipcMain.handle('set-opacity', (event, opacity) => {
 });
 
 ipcMain.handle('get-opacity', () => windowOpacity);
-
-ipcMain.handle('open-external', (event, url) => {
-  shell.openExternal(url);
-});
-
-ipcMain.handle('show-item-in-folder', (event, filePath) => {
-  shell.showItemInFolder(filePath);
-});

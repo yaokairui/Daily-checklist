@@ -17,26 +17,19 @@ contextBridge.exposeInMainWorld('api', {
   listRecycleBin: () => ipcRenderer.invoke('list-recycle-bin'),
 
   exportChecklist: (data) => ipcRenderer.invoke('export-checklist', data),
-  importChecklist: () => ipcRenderer.invoke('import-checklist'),
 
   setupReminders: (todos) => ipcRenderer.invoke('setup-reminders', todos),
 
   getConfig: () => ipcRenderer.invoke('get-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
-  updateShortcut: (key) => ipcRenderer.invoke('update-shortcut', key),
 
   windowMinimize: () => ipcRenderer.send('window-minimize'),
-  windowMaximize: () => ipcRenderer.send('window-maximize'),
   windowClose: () => ipcRenderer.send('window-close'),
-  windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
 
   toggleAlwaysOnTop: (pin) => ipcRenderer.invoke('toggle-always-on-top', pin),
   getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
   setOpacity: (opacity) => ipcRenderer.invoke('set-opacity', opacity),
   getOpacity: () => ipcRenderer.invoke('get-opacity'),
-
-  openExternal: (url) => ipcRenderer.invoke('open-external', url),
-  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
 
   onCreateNewChecklist: (callback) => {
     ipcRenderer.on('create-new-checklist', () => callback());
