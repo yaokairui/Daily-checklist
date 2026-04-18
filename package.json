@@ -42,7 +42,7 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
@@ -59,7 +59,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "日常清单",
       "installerLanguages": ["zh_CN", "en_US"],
-      "language": 2052
+      "language": 2052,
+      "sign": false
     },
     "portable": {
       "artifactName": "${productName}-${version}-Portable-${arch}.${ext}"
@@ -111,6 +112,10 @@
     },
     "appImage": {
       "artifactName": "${productName}-${version}-${arch}.AppImage"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/",
+      "customDir": "{{ version }}"
     },
     "deb": {
       "depends": ["libnotify4", "libxtst6", "libnss3"]

@@ -125,6 +125,10 @@ daily-checklist/
 └── LICENSE              # MIT 许可证
 ```
 
+## 使用截图
+![alt text](image.png)
+![alt text](image-1.png)
+
 ## 贡献
 
 欢迎贡献代码！请阅读 [贡献指南](CONTRIBUTING.md) 了解详情。
