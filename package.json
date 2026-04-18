@@ -1,0 +1,126 @@
+{
+  "name": "daily-checklist",
+  "version": "1.0.0",
+  "description": "桌面日常清单小工具 - 轻量级跨平台待办事项管理",
+  "main": "main.js",
+  "author": "Daily Checklist Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/daily-checklist.git"
+  },
+  "keywords": [
+    "checklist",
+    "todo",
+    "daily",
+    "electron",
+    "desktop"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build": "electron-builder",
+    "build:all": "electron-builder --win --mac --linux",
+    "test": "node test/run-tests.js"
+  },
+  "build": {
+    "appId": "com.daily.checklist",
+    "productName": "日常清单",
+    "copyright": "Copyright © 2024 Daily Checklist Contributors",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-Setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "日常清单",
+      "installerLanguages": ["zh_CN", "en_US"],
+      "language": 2052
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-Portable-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "LSUIElement": false
+      }
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "rpm",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build",
+      "category": "Utility",
+      "maintainer": "Daily Checklist Contributors",
+      "vendor": "Daily Checklist",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.AppImage"
+    },
+    "deb": {
+      "depends": ["libnotify4", "libxtst6", "libnss3"]
+    },
+    "rpm": {
+      "depends": ["libnotify", "libXtst", "nss"]
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

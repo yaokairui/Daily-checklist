@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日常清单</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <div class="titlebar">
+      <div class="titlebar-drag">
+        <span class="titlebar-title">日常清单</span>
+      </div>
+      <div class="titlebar-controls">
+        <button class="titlebar-btn btn-pin" id="btn-pin" title="置顶窗口">📌</button>
+        <button class="titlebar-btn btn-minimize" onclick="api.windowMinimize()">─</button>
+        <button class="titlebar-btn btn-maximize" onclick="api.windowMaximize()">□</button>
+        <button class="titlebar-btn btn-close" onclick="api.windowClose()">✕</button>
+      </div>
+    </div>
+
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h3>清单</h3>
+          <button class="btn-icon" id="btn-new-checklist" title="新建清单 (Ctrl+Shift+N)">＋</button>
+        </div>
+        <div class="sidebar-list" id="checklist-list"></div>
+        <div class="sidebar-footer">
+          <button class="btn-icon" id="btn-recycle-bin" title="回收站">🗑️</button>
+          <button class="btn-icon" id="btn-templates" title="模板管理">📄</button>
+          <button class="btn-icon" id="btn-settings" title="设置">⚙️</button>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">✓</div>
+          <h2 class="empty-title">管理你的每一天</h2>
+          <p class="empty-desc">选择或创建一个清单开始使用</p>
+          <button class="btn-primary btn-lg" id="btn-empty-create">创建今日清单</button>
+          <p class="empty-hint">双击左侧空白区域 或 按 Ctrl+Shift+N 快速创建</p>
+        </div>
+
+        <div class="checklist-view" id="checklist-view" style="display:none;">
+          <div class="checklist-header">
+            <div class="checklist-title-row">
+              <h2 contenteditable="true" id="checklist-title" spellcheck="false">今日清单</h2>
+              <div class="checklist-actions">
+                <button class="btn-icon" id="btn-export" title="导出">📤</button>
+                <button class="btn-icon btn-danger" id="btn-delete-checklist" title="删除清单">🗑️</button>
+              </div>
+            </div>
+            <div class="checklist-stats" id="checklist-stats">
+              <div class="stats-left">
+                <span class="stat-item"><strong id="stat-done">0</strong>/<strong id="stat-total">0</strong> 已完成</span>
+                <span class="stat-divider">·</span>
+                <span class="stat-item">完成率 <strong id="stat-rate">0%</strong></span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="add-todo-row">
+            <input type="text" id="new-todo-input" placeholder="添加新事项，按回车确认..." />
+            <select id="new-todo-priority">
+              <option value="medium">中</option>
+              <option value="high">高</option>
+              <option value="low">低</option>
+            </select>
+            <input type="datetime-local" id="new-todo-reminder" title="设置提醒时间" />
+            <button class="btn-primary" id="btn-add-todo">添加</button>
+          </div>
+
+          <div class="todo-list" id="todo-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-recycle-bin" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>回收站</h3>
+          <button class="btn-icon modal-close" data-modal="modal-recycle-bin">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="recycle-bin-toolbar">
+            <span class="recycle-bin-hint" id="recycle-bin-hint">暂无已删除的清单</span>
+            <button class="btn-secondary btn-danger-text" id="btn-empty-bin" style="display:none;">清空回收站</button>
+          </div>
+          <div class="recycle-bin-list" id="recycle-bin-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-templates" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>模板管理</h3>
+          <button class="btn-icon modal-close" data-modal="modal-templates">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="template-actions">
+            <input type="text" id="template-name-input" placeholder="模板名称" />
+            <button class="btn-primary" id="btn-save-template">保存为模板</button>
+          </div>
+          <div class="template-list" id="template-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-settings" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>设置</h3>
+          <button class="btn-icon modal-close" data-modal="modal-settings">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-item">
+            <label>主题模式</label>
+            <select id="setting-theme">
+              <option value="system">跟随系统</option>
+              <option value="light">浅色</option>
+              <option value="dark">深色</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>窗口置顶</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="setting-always-on-top" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-item">
+            <label>窗口透明度</label>
+            <div class="opacity-control">
+              <input type="range" id="setting-opacity" min="30" max="100" value="100" />
+              <span id="opacity-value">100%</span>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>快捷键</label>
+            <input type="text" id="setting-shortcut" placeholder="Ctrl+Shift+N" />
+            <button class="btn-secondary" id="btn-update-shortcut">更新</button>
+          </div>
+          <div class="setting-item">
+            <label>数据目录</label>
+            <div class="setting-path-group">
+              <span id="setting-data-dir" class="setting-path"></span>
+              <button class="btn-secondary btn-tiny" id="btn-open-data-dir">打开</button>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>导入清单</label>
+            <button class="btn-secondary" id="btn-import">选择文件导入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-edit-todo" style="display:none;">
+      <div class="modal modal-small">
+        <div class="modal-header">
+          <h3>编辑事项</h3>
+          <button class="btn-icon modal-close" data-modal="modal-edit-todo">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="edit-field">
+            <label>事项内容</label>
+            <input type="text" id="edit-todo-text" />
+          </div>
+          <div class="edit-field">
+            <label>优先级</label>
+            <select id="edit-todo-priority">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </div>
+          <div class="edit-field">
+            <label>提醒时间</label>
+            <input type="datetime-local" id="edit-todo-reminder" />
+          </div>
+          <div class="edit-actions">
+            <button class="btn-primary" id="btn-save-edit">保存</button>
+            <button class="btn-secondary modal-close" data-modal="modal-edit-todo">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-confirm" style="display:none;">
+      <div class="modal modal-small">
+        <div class="modal-header">
+          <h3 id="confirm-title">确认操作</h3>
+          <button class="btn-icon modal-close" data-modal="modal-confirm">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-message"></p>
+          <div class="edit-actions">
+            <button class="btn-primary" id="btn-confirm-ok">确认</button>
+            <button class="btn-secondary modal-close" data-modal="modal-confirm">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
